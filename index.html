@@ -118,6 +118,11 @@ body.dark #controls button.rec{color:#000000}
   <h1>캐릭터 대화 관찰</h1>
 
   <div class="box">
+    <h2>화면 모드</h2>
+    <div class="chips" id="themeChips"></div>
+  </div>
+
+  <div class="box">
     <h2>AI 대화 언어</h2>
     <div class="chips" id="langChips"></div>
   </div>
@@ -290,6 +295,14 @@ function keyReady(){
   return state.model === 'claude' || !!relayUrl();
 }
 function renderKeyUI(){
+  const tc = $('themeChips'); tc.innerHTML = '';
+  [['light', '라이트'], ['dark', '다크']].forEach(([id, label]) => {
+    const b = document.createElement('button');
+    b.className = 'chip' + (state.theme === id ? ' on' : '');
+    b.textContent = label;
+    b.onclick = () => { setTheme(id); renderSetup(); };
+    tc.appendChild(b);
+  });
   const lc = $('langChips'); lc.innerHTML = '';
   [['ko', '한국어'], ['en', 'English']].forEach(([id, label]) => {
     const b = document.createElement('button');
@@ -331,11 +344,13 @@ function applyTheme(){
   document.body.classList.toggle('dark', state.theme === 'dark');
   $('themeBtn').textContent = state.theme === 'dark' ? '라이트 모드' : '다크 모드';
 }
-$('themeBtn').onclick = () => {
-  state.theme = state.theme === 'dark' ? 'light' : 'dark';
-  safeSet(STORE.theme, state.theme);
+function setTheme(t){
+  state.theme = t;
+  safeSet(STORE.theme, t);
   applyTheme();
-};
+}
+function isDark(){ return state.theme === 'dark'; }
+$('themeBtn').onclick = () => { setTheme(state.theme === 'dark' ? 'light' : 'dark'); renderSetup(); };
 applyTheme();
 
 /* ---------- 설정 화면 렌더 ---------- */
@@ -834,7 +849,7 @@ function drawBlock(ctx, b, y, img){
   if(img) ctx.drawImage(img, sx, sdY, IMG_SD_W, IMG_SD_H);
 
   // 이름
-  ctx.font = NAME_FONT; ctx.fillStyle = '#666';
+  ctx.font = NAME_FONT; ctx.fillStyle = isDark() ? '#b0b0b0' : '#666';
   ctx.textAlign = left ? 'left' : 'right';
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(nm(b.c), left ? bx + 4 : bx + b.bubbleW - 4, y + 22);
@@ -860,7 +875,7 @@ function drawPage(blocks, imgMap){
   const canvas = document.createElement('canvas');
   canvas.width = IMG_W; canvas.height = H;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#fffaf0'; ctx.fillRect(0, 0, IMG_W, H);
+  ctx.fillStyle = isDark() ? '#000000' : '#fffaf0'; ctx.fillRect(0, 0, IMG_W, H);
   let y = IMG_PAD;
   blocks.forEach(b => { drawBlock(ctx, b, y, imgMap[b.src]); y += b.h; });
   return canvas;
