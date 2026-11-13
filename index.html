@@ -50,7 +50,7 @@ input[type=text]:focus{border-color:var(--ink)}
 #startBtn:disabled{background:var(--primary-disabled);color:var(--muted);cursor:not-allowed}
 
 /* ---------- 무대 ---------- */
-#stage{display:none;height:100%;grid-template-columns:1fr 1.3fr 1fr;grid-template-rows:minmax(0,1fr);gap:0;padding:0;overflow:hidden}
+#stage{display:none;height:100vh;grid-template-columns:minmax(0,50vh) minmax(0,1fr) minmax(0,50vh);grid-template-rows:minmax(0,1fr);gap:0;padding:0;overflow:hidden}
 .side{display:block;position:relative;height:100%;min-height:0;padding:0;background:none;border-radius:0;overflow:hidden;transition:opacity .4s}
 .side.dim{opacity:.45}
 .portrait{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:20px}
@@ -91,6 +91,17 @@ input[type=text]:focus{border-color:var(--ink)}
 #controls button{height:36px;padding:8px 14px;border:1px solid var(--hairline);background:var(--canvas);color:var(--ink);border-radius:12px;cursor:pointer;font-size:14px;font-weight:600;line-height:1}
 #stopBtn{background:var(--primary);color:#fff;border-color:var(--primary)}
 #controls button.rec{background:var(--coral);border-color:var(--coral);color:var(--ink)}
+
+/* ---------- 다크 모드 ---------- */
+body.dark{--canvas:#000000;--surface-soft:#0d0d0d;--surface-card:#1a1a1a;--ink:#ffffff;--body:#ffffff;--muted:#b0b0b0;--muted-soft:#7a7a7a;--hairline:#2e2e2e;--primary:#ffffff;--primary-disabled:#2e2e2e;color-scheme:dark}
+body.dark #startBtn{background:#ffffff;color:#000000}
+body.dark #startBtn:disabled{background:#2e2e2e;color:#7a7a7a}
+body.dark #stopBtn{background:#ffffff;color:#000000;border-color:#ffffff}
+body.dark .next-btn{background:#ffffff;color:#000000;border-color:#ffffff}
+body.dark .next-btn:disabled{background:#2e2e2e;color:#7a7a7a;border-color:#2e2e2e}
+body.dark .placeholder{background:#1a1a1a}
+body.dark .chip.on{color:#ffffff}
+body.dark #controls button.rec{color:#000000}
 
 @media (max-width:700px){
   #setup h1{font-size:36px;letter-spacing:-1px}
@@ -154,6 +165,7 @@ input[type=text]:focus{border-color:var(--ink)}
         <button id="stopBtn">일시정지</button>
         <button id="imgBtn">이미지 저장</button>
         <button id="recBtn">녹화</button>
+        <button id="themeBtn">다크 모드</button>
         <button id="resetBtn">다시 설정</button>
       </span>
     </div>
@@ -260,7 +272,7 @@ const MODELS = {
   claude: { label: 'Claude Sonnet 4.6' },
   luna:   { label: 'GPT-6 Luna' },
 };
-const STORE = { key: 'ct_api_key', relay: 'ct_relay_url', model: 'ct_model', remember: 'ct_remember', lang: 'ct_lang' };
+const STORE = { key: 'ct_api_key', relay: 'ct_relay_url', model: 'ct_model', remember: 'ct_remember', lang: 'ct_lang', theme: 'ct_theme' };
 function safeGet(k){ try{ return localStorage.getItem(k) || ''; }catch(e){ return ''; } }
 function safeSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
 function safeDel(k){ try{ localStorage.removeItem(k); }catch(e){} }
@@ -313,6 +325,18 @@ $('rememberKey').addEventListener('change', e => {
   if(remember) safeSet(STORE.key, apiKey); else safeDel(STORE.key);
 });
 $('clearKey').onclick = () => { apiKey = ''; safeDel(STORE.key); renderSetup(); };
+
+state.theme = safeGet(STORE.theme) === 'dark' ? 'dark' : 'light';
+function applyTheme(){
+  document.body.classList.toggle('dark', state.theme === 'dark');
+  $('themeBtn').textContent = state.theme === 'dark' ? '라이트 모드' : '다크 모드';
+}
+$('themeBtn').onclick = () => {
+  state.theme = state.theme === 'dark' ? 'light' : 'dark';
+  safeSet(STORE.theme, state.theme);
+  applyTheme();
+};
+applyTheme();
 
 /* ---------- 설정 화면 렌더 ---------- */
 function renderSetup(){
