@@ -323,14 +323,17 @@ const COMMON_GUIDE = `[공통 지침]
 - 서로의 말과 행동에 반응하며 대화를 이어간다. 혼자 설명하거나 독백하는 방식은 피한다.
 - 캐릭터의 개성을 살려 자연스럽게 말하며, 모든 캐릭터가 같은 말투나 반응을 보이지 않도록 한다.
 - 한 번의 발언은 1~2문장으로 간결하게 작성한다.
-- 불필요한 상황 설명, 행동 묘사, 해설은 최소화한다.
+- 불필요한 상황 설명과 해설은 하지 않는다. 행동 묘사는 괄호 안에 짧게만 쓴다.
 - 다른 캐릭터의 발언을 대신 작성하거나 여러 캐릭터의 대사를 한꺼번에 출력하지 않는다.
 - 대화 주제와 분위기는 자연스럽게 변화할 수 있으며, 억지로 대화를 이어가지 않는다.
 - 이미 충분히 이야기한 주제에 계속 말을 얹으며 질질 끌지 않는다. 할 말이 끝났다면 자연스럽게 마무리하고 다른 주제로 넘어간다.
 - 설명하듯 말하지 않는다. 상황을 자세히 풀어 말하지 말고, 문맥에 맡겨 짧고 자연스럽게 말한다.
 - 문장은 짧게 쓴다. 긴 문장을 늘이지 말고, 상대의 말에 바로 받아치듯 대화가 티키타카로 이어지게 한다.
 - 상대 캐릭터가 어떤 행동을 하겠다고 하면 그 행동을 말로 되짚지 않는다. 행동을 설명하는 대신 그 행동에 대한 반응만 말한다.
-- 상대 캐릭터의 제안을 무턱대고 받아들이지 않는다. 캐릭터의 성격을 생각해 맞지 않는 제안은 쳐내거나 거절한다.`;
+- 상대 캐릭터의 제안을 무턱대고 받아들이지 않는다. 캐릭터의 성격을 생각해 맞지 않는 제안은 쳐내거나 거절한다.
+- 내가 무엇을 하려는지 말로 예고하거나 설명하지 않는다. 예를 들어 "지금 보여줄게", "이제 해 볼게"처럼 말하지 않는다.
+- 행동은 말 대신 괄호 안의 짧은 지문으로만 표현한다. 예: 여긴 어때? (영화관을 손으로 가리킨다)
+- 사람처럼 짧게 툭툭 주고받는다. 정리하거나 설명하듯 말하지 않고, 상대 말에 바로 반응한다.`;
 
 const EMOTIONS = ['neutral','happy','sad','angry','surprised','embarrassed','thinking'];
 const PRESET_TOPICS = ['일상 잡담','좋아하는 음식','주말 계획','요즘 고민 상담','어릴 적 추억'];
@@ -511,14 +514,15 @@ $('stopBtn').onclick = () => {
     $('status').textContent = '주제: ' + topicLabel() + ' (일시정지)';
   }else{
     // 재시작
-    startLoop();
+    state.running = true;
+    setNextUI();
     setStopIcon(true);
     $('status').textContent = '주제: ' + topicLabel();
   }
 };
 $('resetBtn').onclick = () => {
   state.running = false;
-  loopSeq++; pendingTurn = null; fetching = false;
+  loopSeq++; fetching = false;
   setStopIcon(true);
   $('stage').style.display = 'none';
   $('setup').style.display = 'flex';
@@ -782,54 +786,35 @@ function parseTurn(raw){
 
 /* ---------- 메인 루프 ---------- */
 let loopSeq = 0;          // 세대 번호: 재시작/다시 설정 시 이전 요청 결과 무시
-let pendingTurn = null;    // 미리 로딩된 다음 대사 (아직 화면에 안 나온 것)
 let fetching = false;      // 다음 대사 로딩 중 여부
 let failCount = 0;
 
 function setNextUI(){
   const b = $('nextBtn');
-  b.disabled = fetching || !pendingTurn;
+  b.disabled = fetching || !state.running;
   b.classList.toggle('loading', fetching);
 }
 
-// 다음 대사를 백그라운드에서 미리 준비 (화면에는 아직 표시하지 않음)
-async function fetchNext(force = false){
-  if((!force && !state.running) || fetching || pendingTurn){ setNextUI(); return; }
+// 대사 한 개를 생성해서 바로 표시 (다음 버튼을 누를 때마다 호출)
+async function generateTurn(){
+  if(fetching) return;
   const myId = loopSeq;
   fetching = true; setNextUI();
   try{
     const turn = parseTurn(await callClaude(buildPrompt()));
-    if(myId !== loopSeq) return;      // 재시작/다시 설정으로 무효화된 결과
-    pendingTurn = turn;
-    failCount = 0;
+    if(myId !== loopSeq) return;     // 수정/재시작 등으로 무효화된 결과
+    showTurn(turn);
     $('status').textContent = '주제: ' + topicLabel();
   }catch(err){
     console.error(err);
-    if(myId !== loopSeq) return;
-    failCount++;
-    if(failCount >= 3){
-      state.running = false;
-      setStopIcon(false);
-      $('status').textContent = '오류로 중지: ' + err.message;
-    }else{
-      $('status').textContent = '응답 오류 (' + err.message + '), 재시도 ' + failCount + '/3...';
-      setTimeout(() => { if(myId === loopSeq){ fetching = false; fetchNext(); } }, 3000);
-      return;
-    }
+    if(myId === loopSeq) $('status').textContent = '응답 오류: ' + err.message + ' (다음 버튼으로 다시 시도)';
+  }finally{
+    if(myId === loopSeq){ fetching = false; setNextUI(); }
   }
-  fetching = false;
-  setNextUI();
 }
 
 // 다음 버튼: 준비된 대사를 화면에 표시하고, 그 다음 대사를 미리 로딩
-function advance(){
-  if(!pendingTurn || fetching) return;
-  const turn = pendingTurn;
-  pendingTurn = null;
-  showTurn(turn);
-  setNextUI();
-  fetchNext();
-}
+function advance(){ generateTurn(); }
 $('nextBtn').onclick = advance;
 
 /* ---------- 마지막 메시지 옆 버튼 (수정 · 방향 명령) ---------- */
@@ -900,10 +885,10 @@ function applyEdit(text){
     fitBubble(bubble, wrap.classList.contains('left'));
   }
   placeEditBtn();
-  loopSeq++; pendingTurn = null; fetching = false;
+  loopSeq++; fetching = false;
   setNextUI();
   $('status').textContent = '주제: ' + topicLabel();
-  fetchNext();
+  setNextUI();
 }
 
 // ----- 마지막 대사 방향 지정: AI가 그 발언을 방향에 맞게 다시 씀 -----
@@ -949,7 +934,7 @@ async function rewriteLast(direction){
   const dynamic = `[지금까지의 대화]\n${prior}\n\n[다시 쓸 발언] ${nm(charById(last.speaker))} (id: ${last.speaker})\n원래 대사: ${last.text}\n\n[수정 방향]\n${direction}\n\n위 발언을 같은 캐릭터가 수정 방향에 맞게 다시 쓴다. 1~2문장으로, 직전 대화 흐름에 자연스럽게 이어지도록 JSON으로 출력하라.`;
 
   // 진행 중이던 다음 대사는 수정 전 문장 기준이므로 폐기
-  loopSeq++; pendingTurn = null; fetching = false; setNextUI();
+  loopSeq++; fetching = false; setNextUI();
   const myId = loopSeq;
   $('status').textContent = '마지막 대사 다시 쓰는 중...';
   try{
@@ -973,17 +958,15 @@ async function rewriteLast(direction){
   }
   if(myId === loopSeq){
     $('status').textContent = '주제: ' + topicLabel();
-    fetchNext();
+    setNextUI();
   }
 }
 
 function startLoop(){
   loopSeq++;
   state.running = true;
-  pendingTurn = null;
   fetching = false;
-  failCount = 0;
-  fetchNext();
+  generateTurn();   // 첫 대사는 자동 생성
 }
 
 renderSetup();
@@ -1333,7 +1316,7 @@ function resumeChat(id){
   if(selected.length < 2){ alert('이 대화의 캐릭터 정보를 불러올 수 없습니다.'); return; }
 
   closeList();
-  loopSeq++; pendingTurn = null; fetching = false; state.running = false;
+  loopSeq++; fetching = false; state.running = false;
   state.lang = ch.lang === 'en' ? 'en' : 'ko'; safeSet(STORE.lang, state.lang);
   state.topicMode = ch.topicMode; state.topicText = ch.topicText;
   state.chosen = new Set(selected.map(c => c.id));
@@ -1352,7 +1335,9 @@ function resumeChat(id){
   renderSD(null);
   // 저장된 대사를 순서대로 다시 표시 (슬롯·말풍선 방향·표정 모두 같은 경로로 복원)
   ch.history.forEach(t => showTurn({ speaker: t.speaker, emotion: t.emotion, text: t.text }));
-  startLoop();
+  loopSeq++; state.running = true; fetching = false;
+  setStopIcon(true);
+  setNextUI();
 }
 
 // ----- 삭제 전 확인과 함께 목록 닫기 (Esc) -----
