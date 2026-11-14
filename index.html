@@ -78,7 +78,7 @@ input[type=text]:focus{border-color:var(--ink)}
 .sd img{width:100%;height:100%;object-fit:contain;display:block}
 .sd .placeholder{border:none;border-radius:0;min-height:0;font-size:12px;background:transparent}
 
-#nextRow{display:flex;justify-content:center;padding-top:12px}
+#nextRow{display:flex;justify-content:center;align-items:center;gap:12px;padding-top:12px}
 .next-btn{position:relative;width:56px;height:56px;border-radius:50%;border:1px solid var(--ink);background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
 .next-btn svg{margin-left:3px}
 .next-btn:disabled{background:var(--primary-disabled);border-color:var(--hairline);color:var(--muted);cursor:not-allowed}
@@ -102,6 +102,18 @@ body.dark .next-btn:disabled{background:#2e2e2e;color:#7a7a7a;border-color:#2e2e
 body.dark .placeholder{background:#1a1a1a}
 body.dark .chip.on{color:#ffffff}
 body.dark #controls button.rec{color:#000000}
+
+.cmd-round{width:44px;height:44px;border-radius:50%;border:1px solid var(--hairline);background:var(--canvas);color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.cmd-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;z-index:20;padding:24px}
+.cmd-overlay[hidden]{display:none}
+.cmd-modal{width:min(640px,100%);background:var(--canvas);border:1px solid var(--hairline);border-radius:24px;padding:24px}
+.cmd-title{font-size:12px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+.cmd-row{display:flex;gap:8px;align-items:center}
+.cmd-row input{flex:1;min-width:0;height:44px;padding:12px 16px;border:1px solid var(--hairline);border-radius:12px;background:var(--canvas);color:var(--ink);font-size:16px;outline:none}
+.cmd-row input:focus{border-color:var(--ink)}
+.cmd-btn{height:44px;padding:0 16px;border-radius:12px;border:1px solid var(--hairline);background:var(--canvas);color:var(--ink);font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap}
+.cmd-btn.primary{background:var(--primary);color:#fff;border-color:var(--primary)}
+body.dark .cmd-btn.primary{background:#fff;color:#000;border-color:#fff}
 
 @media (max-width:700px){
   #setup h1{font-size:36px;letter-spacing:-1px}
@@ -159,6 +171,13 @@ body.dark #controls button.rec{color:#000000}
     <div id="log"></div>
     <div id="sdRow"></div>
     <div id="nextRow">
+      <button id="cmdBtn" class="cmd-round" aria-label="대화 방향 명령">
+        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3.5 20.5 L15 9" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+          <path d="M17 2.5 l1.3 2.9 2.9 1.3 -2.9 1.3 -1.3 2.9 -1.3 -2.9 -2.9 -1.3 2.9 -1.3z" fill="currentColor"/>
+          <path d="M20.5 11 l0.7 1.5 1.5 0.7 -1.5 0.7 -0.7 1.5 -0.7 -1.5 -1.5 -0.7 1.5 -0.7z" fill="currentColor"/>
+        </svg>
+      </button>
       <button id="nextBtn" class="next-btn" aria-label="다음 대사" disabled>
         <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
         <span class="spin"></span>
@@ -176,6 +195,17 @@ body.dark #controls button.rec{color:#000000}
     </div>
   </div>
   <div class="side" id="rightSide"></div>
+</div>
+
+<div id="cmdOverlay" class="cmd-overlay" hidden>
+  <div class="cmd-modal" role="dialog" aria-modal="true" aria-label="대화 방향 명령">
+    <div class="cmd-title">다음 대사 방향 명령</div>
+    <form id="cmdForm" class="cmd-row" autocomplete="off">
+      <input type="text" id="cmdInput" maxlength="200" placeholder="예) 레이시가 듀크를 더 놀려 줘">
+      <button type="button" id="cmdCancel" class="cmd-btn">취소</button>
+      <button type="submit" class="cmd-btn primary">확인</button>
+    </form>
+  </div>
 </div>
 
 <script>
@@ -430,7 +460,7 @@ $('stopBtn').onclick = () => {
 };
 $('resetBtn').onclick = () => {
   state.running = false;
-  loopSeq++; pendingTurn = null; fetching = false;
+  loopSeq++; pendingTurn = null; fetching = false; state.directive = '';
   $('stopBtn').textContent = '일시정지';
   $('stage').style.display = 'none';
   $('setup').style.display = 'flex';
@@ -615,7 +645,10 @@ function buildPrompt(){
     ? '자유 주제: 캐릭터들이 흥미롭게 이야기할 주제를 스스로 정해 자연스럽게 대화를 시작한다.'
     : state.topicText;
   const last = state.lastSpeaker ? nm(charById(state.lastSpeaker)) : '없음';
-  const dynamic = `[주제]\n${topicLine}\n\n[최근 대화]\n${recent}\n\n[규칙]\n- 직전 발언자(${last})는 다음 발언자로 고르지 않는다.\n- 직전 대화에 자연스럽게 반응하는 발언 하나를 만든다.\n\n다음 발언 하나를 JSON으로 출력하라.`;
+  const dirLine = state.directive
+    ? `\n\n[이번 발언의 방향 지시]\n${state.directive}\n이 지시는 이번 발언 하나에만 반영하고, 자연스럽게 대화에 녹여 말한다.`
+    : '';
+  const dynamic = `[주제]\n${topicLine}\n\n[최근 대화]\n${recent}\n\n[규칙]\n- 직전 발언자(${last})는 다음 발언자로 고르지 않는다.\n- 직전 대화에 자연스럽게 반응하는 발언 하나를 만든다.${dirLine}\n\n다음 발언 하나를 JSON으로 출력하라.`;
   return { stable, dynamic };
 }
 
@@ -704,8 +737,8 @@ function setNextUI(){
 }
 
 // 다음 대사를 백그라운드에서 미리 준비 (화면에는 아직 표시하지 않음)
-async function fetchNext(){
-  if(!state.running || fetching || pendingTurn){ setNextUI(); return; }
+async function fetchNext(force = false){
+  if((!force && !state.running) || fetching || pendingTurn){ setNextUI(); return; }
   const myId = loopSeq;
   fetching = true; setNextUI();
   try{
@@ -713,6 +746,8 @@ async function fetchNext(){
     if(myId !== loopSeq) return;      // 재시작/다시 설정으로 무효화된 결과
     pendingTurn = turn;
     failCount = 0;
+    state.directive = '';   // 방향 명령은 이 한 번의 출력에만 적용
+    $('status').textContent = '주제: ' + topicLabel();
   }catch(err){
     console.error(err);
     if(myId !== loopSeq) return;
@@ -742,8 +777,37 @@ function advance(){
 }
 $('nextBtn').onclick = advance;
 
+state.directive = '';   // 다음 출력에만 적용되는 방향 명령
+function openCmd(){
+  $('cmdOverlay').hidden = false;
+  $('cmdInput').value = '';
+  setTimeout(() => $('cmdInput').focus(), 0);
+}
+function closeCmd(){ $('cmdOverlay').hidden = true; }
+$('cmdBtn').onclick = openCmd;
+$('cmdCancel').onclick = closeCmd;
+$('cmdOverlay').addEventListener('click', e => { if(e.target === $('cmdOverlay')) closeCmd(); });
+document.addEventListener('keydown', e => { if(e.key === 'Escape' && !$('cmdOverlay').hidden) closeCmd(); });
+$('cmdForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const cmd = $('cmdInput').value.trim();
+  closeCmd();
+  if(cmd) applyCommand(cmd);
+});
+// 대기 중인 다음 대사를 폐기하고, 입력한 방향으로 다시 생성
+function applyCommand(cmd){
+  state.directive = cmd;
+  loopSeq++;                 // 진행 중이던 이전 요청 결과는 무시
+  pendingTurn = null;
+  fetching = false;
+  setNextUI();
+  $('status').textContent = '방향 적용 중: ' + cmd;
+  fetchNext(true);
+}
+
 function startLoop(){
   loopSeq++;
+  state.directive = '';
   state.running = true;
   pendingTurn = null;
   fetching = false;
