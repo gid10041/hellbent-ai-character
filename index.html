@@ -61,7 +61,7 @@ input[type=text]:focus{border-color:var(--ink)}
 .center{display:flex;flex-direction:column;min-width:0;min-height:0;height:100%;overflow:hidden;padding:24px;background:var(--canvas);border-left:1px solid var(--hairline);border-right:1px solid var(--hairline);border-radius:0}
 #log{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:16px;padding:4px 8px}
 
-.msg{max-width:88%;animation:rise .35s ease-out}
+.msg{position:relative;max-width:calc(100% - 100px);animation:rise .35s ease-out}
 .msg.left{align-self:flex-start}
 .msg.right{align-self:flex-end}
 .msg .who{font-size:13px;font-weight:600;color:var(--muted);margin:0 4px 6px}
@@ -115,6 +115,28 @@ body.dark #controls button.rec{color:#000000}
 .cmd-btn.primary{background:var(--primary);color:#fff;border-color:var(--primary)}
 body.dark .cmd-btn.primary{background:#fff;color:#000;border-color:#fff}
 
+.msg-tools{position:absolute;display:flex;gap:8px;z-index:2}
+.cmd-round.tool{width:40px;height:40px;background:var(--canvas)}
+.cmd-col{display:flex;flex-direction:column;gap:12px}
+.cmd-col textarea{width:100%;padding:12px 16px;border:1px solid var(--hairline);border-radius:12px;background:var(--canvas);color:var(--ink);font-size:16px;line-height:1.5;resize:vertical;outline:none;font-family:inherit}
+.cmd-col textarea:focus{border-color:var(--ink)}
+.cmd-actions{display:flex;justify-content:flex-end;gap:8px}
+
+.list-round{width:44px;height:44px;border-radius:50%;border:1px solid var(--hairline);background:var(--canvas);color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0}
+#listBtnSetup{position:fixed;top:20px;right:20px;z-index:5}
+.center-head{display:flex;justify-content:flex-end;height:44px;flex-shrink:0;margin:-8px -8px 0 0}
+.list-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;z-index:25;padding:24px}
+.list-overlay[hidden]{display:none}
+.list-panel{width:min(760px,100%);max-height:85vh;overflow:auto;background:var(--canvas);border:1px solid var(--hairline);border-radius:24px;padding:24px;display:flex;flex-direction:column;gap:16px}
+.list-head{display:flex;justify-content:space-between;align-items:center;font-size:16px;font-weight:600}
+.list-body{display:flex;flex-direction:column;gap:12px}
+.list-empty{color:var(--muted);text-align:center;padding:32px 0}
+.chat-card{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:20px 24px;border:1px solid var(--hairline);border-radius:24px;background:var(--surface-soft)}
+.chat-info{min-width:0}
+.chat-title{font-size:16px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-meta{font-size:13px;color:var(--muted);margin-top:4px}
+.chat-actions{display:flex;gap:8px;flex-shrink:0}
+
 @media (max-width:700px){
   #setup h1{font-size:36px;letter-spacing:-1px}
   #stage{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr) auto;padding:8px;gap:8px}
@@ -127,6 +149,7 @@ body.dark .cmd-btn.primary{background:#fff;color:#000;border-color:#fff}
 
 <!-- ============ 설정 화면 ============ -->
 <div id="setup">
+  <button id="listBtnSetup" class="list-round" aria-label="대화 목록" title="대화 목록"></button>
   <h1>캐릭터 대화 관찰</h1>
 
   <div class="box">
@@ -168,16 +191,10 @@ body.dark .cmd-btn.primary{background:#fff;color:#000;border-color:#fff}
 <div id="stage">
   <div class="side" id="leftSide"></div>
   <div class="center">
+    <div class="center-head"><button id="listBtnStage" class="list-round" aria-label="대화 목록" title="대화 목록"></button></div>
     <div id="log"></div>
     <div id="sdRow"></div>
     <div id="nextRow">
-      <button id="cmdBtn" class="cmd-round" aria-label="대화 방향 명령">
-        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M3.5 20.5 L15 9" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/>
-          <path d="M17 2.5 l1.3 2.9 2.9 1.3 -2.9 1.3 -1.3 2.9 -1.3 -2.9 -2.9 -1.3 2.9 -1.3z" fill="currentColor"/>
-          <path d="M20.5 11 l0.7 1.5 1.5 0.7 -1.5 0.7 -0.7 1.5 -0.7 -1.5 -1.5 -0.7 1.5 -0.7z" fill="currentColor"/>
-        </svg>
-      </button>
       <button id="nextBtn" class="next-btn" aria-label="다음 대사" disabled>
         <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg>
         <span class="spin"></span>
@@ -189,6 +206,7 @@ body.dark .cmd-btn.primary{background:#fff;color:#000;border-color:#fff}
         <button id="stopBtn">일시정지</button>
         <button id="imgBtn">이미지 저장</button>
         <button id="recBtn">녹화</button>
+        <button id="saveBtn">대화 저장</button>
         <button id="themeBtn">다크 모드</button>
         <button id="resetBtn">다시 설정</button>
       </span>
@@ -198,13 +216,33 @@ body.dark .cmd-btn.primary{background:#fff;color:#000;border-color:#fff}
 </div>
 
 <div id="cmdOverlay" class="cmd-overlay" hidden>
-  <div class="cmd-modal" role="dialog" aria-modal="true" aria-label="대화 방향 명령">
-    <div class="cmd-title">다음 대사 방향 명령</div>
-    <form id="cmdForm" class="cmd-row" autocomplete="off">
-      <input type="text" id="cmdInput" maxlength="200" placeholder="예) 레이시가 듀크를 더 놀려 줘">
-      <button type="button" id="cmdCancel" class="cmd-btn">취소</button>
+  <div class="cmd-modal" role="dialog" aria-modal="true" aria-label="마지막 대사 수정">
+    <div class="cmd-title">마지막 대사 수정</div>
+    <form id="cmdForm" class="cmd-col" autocomplete="off">
+      <textarea id="cmdInput" rows="3" maxlength="400"></textarea>
+      <div class="cmd-actions">
+        <button type="button" id="cmdCancel" class="cmd-btn">취소</button>
+        <button type="submit" class="cmd-btn primary">확인</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="dirOverlay" class="cmd-overlay" hidden>
+  <div class="cmd-modal" role="dialog" aria-modal="true" aria-label="다음 대사 방향 명령">
+    <div class="cmd-title">다음 대사 방향 명령 (다음 한 번에만 적용)</div>
+    <form id="dirForm" class="cmd-row" autocomplete="off">
+      <input type="text" id="dirInput" maxlength="200" placeholder="예) 레이시가 듀크를 더 놀려 줘">
+      <button type="button" id="dirCancel" class="cmd-btn">취소</button>
       <button type="submit" class="cmd-btn primary">확인</button>
     </form>
+  </div>
+</div>
+
+<div id="listOverlay" class="list-overlay" hidden>
+  <div class="list-panel" role="dialog" aria-modal="true" aria-label="대화 목록">
+    <div class="list-head"><span>대화 목록</span><button id="listClose" class="cmd-btn">닫기</button></div>
+    <div id="listBody" class="list-body"></div>
   </div>
 </div>
 
@@ -607,6 +645,7 @@ function appendMsg(t){
   const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
   log.appendChild(wrap);
   fitBubble(bubble, side === 'left');
+  placeEditBtn();
   if(nearBottom) log.scrollTop = log.scrollHeight;
 }
 
@@ -746,7 +785,7 @@ async function fetchNext(force = false){
     if(myId !== loopSeq) return;      // 재시작/다시 설정으로 무효화된 결과
     pendingTurn = turn;
     failCount = 0;
-    state.directive = '';   // 방향 명령은 이 한 번의 출력에만 적용
+    state.directive = '';   // 방향 지시는 이 한 번의 출력에만 적용
     $('status').textContent = '주제: ' + topicLabel();
   }catch(err){
     console.error(err);
@@ -777,27 +816,106 @@ function advance(){
 }
 $('nextBtn').onclick = advance;
 
-state.directive = '';   // 다음 출력에만 적용되는 방향 명령
+/* ---------- 마지막 메시지 옆 버튼 (수정 · 방향 명령) ---------- */
+const PENCIL_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="currentColor"/></svg>`;
+const WAND_SVG = `<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 20.5 L15 9" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/><path d="M17 2.5 l1.3 2.9 2.9 1.3 -2.9 1.3 -1.3 2.9 -1.3 -2.9 -2.9 -1.3 2.9 -1.3z" fill="currentColor"/><path d="M20.5 11 l0.7 1.5 1.5 0.7 -1.5 0.7 -0.7 1.5 -0.7 -1.5 -1.5 -0.7 1.5 -0.7z" fill="currentColor"/></svg>`;
+
+function makeTool(svg, label, onClick){
+  const b = document.createElement('button');
+  b.className = 'cmd-round tool';
+  b.setAttribute('aria-label', label);
+  b.title = label;
+  b.innerHTML = svg;
+  b.onclick = onClick;
+  return b;
+}
+const msgTools = document.createElement('div');
+msgTools.className = 'msg-tools';
+const editBtn = makeTool(PENCIL_SVG, '마지막 대사 수정', () => openCmd());
+const wandBtn = makeTool(WAND_SVG, '다음 대사 방향 명령', () => openDir());
+msgTools.append(editBtn, wandBtn);
+
+function lastMsgWrap(){
+  const ws = $('log').querySelectorAll('.msg');
+  return ws.length ? ws[ws.length - 1] : null;
+}
+// 두 버튼을 마지막 메시지 옆에 나란히 배치 (왼쪽 메시지 → 오른쪽, 오른쪽 메시지 → 왼쪽)
+function placeEditBtn(){
+  const wrap = lastMsgWrap();
+  if(!wrap || !state.history.length){ msgTools.remove(); return; }
+  const bubble = wrap.querySelector('.bubble');
+  if(msgTools.parentElement !== wrap) wrap.appendChild(msgTools);
+  const left = wrap.classList.contains('left');
+  msgTools.style.left = left ? 'calc(100% + 8px)' : 'auto';
+  msgTools.style.right = left ? 'auto' : 'calc(100% + 8px)';
+  msgTools.style.top = (bubble.offsetTop + bubble.offsetHeight / 2 - 20) + 'px';
+}
+window.addEventListener('resize', placeEditBtn);
+
+// ----- 마지막 대사 수정 -----
 function openCmd(){
+  const last = state.history[state.history.length - 1];
+  if(!last) return;
   $('cmdOverlay').hidden = false;
-  $('cmdInput').value = '';
-  setTimeout(() => $('cmdInput').focus(), 0);
+  $('cmdInput').value = last.text;
+  setTimeout(() => { $('cmdInput').focus(); $('cmdInput').select(); }, 0);
 }
 function closeCmd(){ $('cmdOverlay').hidden = true; }
-$('cmdBtn').onclick = openCmd;
 $('cmdCancel').onclick = closeCmd;
 $('cmdOverlay').addEventListener('click', e => { if(e.target === $('cmdOverlay')) closeCmd(); });
-document.addEventListener('keydown', e => { if(e.key === 'Escape' && !$('cmdOverlay').hidden) closeCmd(); });
+$('cmdInput').addEventListener('keydown', e => {
+  if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); $('cmdForm').requestSubmit(); }
+});
 $('cmdForm').addEventListener('submit', e => {
   e.preventDefault();
-  const cmd = $('cmdInput').value.trim();
+  const text = $('cmdInput').value.trim();
   closeCmd();
-  if(cmd) applyCommand(cmd);
+  if(text) applyEdit(text);
+});
+// 마지막 대사 수정: 화면·기록을 고치고, 준비된 다음 대사는 수정 전 문장 기준이므로 폐기 후 다시 준비
+function applyEdit(text){
+  const last = state.history[state.history.length - 1];
+  if(!last) return;
+  last.text = text;
+  const wrap = lastMsgWrap();
+  if(wrap){
+    const bubble = wrap.querySelector('.bubble');
+    bubble.querySelector('.bubble-text').textContent = text;
+    fitBubble(bubble, wrap.classList.contains('left'));
+  }
+  placeEditBtn();
+  loopSeq++; pendingTurn = null; fetching = false;
+  setNextUI();
+  $('status').textContent = '주제: ' + topicLabel();
+  fetchNext();
+}
+
+// ----- 다음 대사 방향 명령 (다음 한 번의 출력에만 적용) -----
+state.directive = '';
+function openDir(){
+  if(!state.history.length) return;
+  $('dirOverlay').hidden = false;
+  $('dirInput').value = '';
+  setTimeout(() => $('dirInput').focus(), 0);
+}
+function closeDir(){ $('dirOverlay').hidden = true; }
+$('dirCancel').onclick = closeDir;
+$('dirOverlay').addEventListener('click', e => { if(e.target === $('dirOverlay')) closeDir(); });
+document.addEventListener('keydown', e => {
+  if(e.key !== 'Escape') return;
+  if(!$('cmdOverlay').hidden) closeCmd();
+  if(!$('dirOverlay').hidden) closeDir();
+});
+$('dirForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const cmd = $('dirInput').value.trim();
+  closeDir();
+  if(cmd) applyDirective(cmd);
 });
 // 대기 중인 다음 대사를 폐기하고, 입력한 방향으로 다시 생성
-function applyCommand(cmd){
+function applyDirective(cmd){
   state.directive = cmd;
-  loopSeq++;                 // 진행 중이던 이전 요청 결과는 무시
+  loopSeq++;
   pendingTurn = null;
   fetching = false;
   setNextUI();
@@ -1029,6 +1147,157 @@ $('recBtn').onclick = () => { rec.mr ? stopRecording() : startRecording(); };
 if(!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia && window.MediaRecorder)){
   $('recBtn').style.display = 'none';
 }
+/* =====================================================================
+   대화 저장 · 대화 목록 · 이어하기 · 삭제 (브라우저 저장소에 보관)
+   ===================================================================== */
+const CHAT_KEY = 'ct_saved_chats';
+const LIST_ICON = `<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>`;
+$('listBtnSetup').innerHTML = LIST_ICON;
+$('listBtnStage').innerHTML = LIST_ICON;
+
+function loadChats(){
+  try{ return JSON.parse(localStorage.getItem(CHAT_KEY) || '[]'); }catch(e){ return []; }
+}
+function storeChats(list){
+  try{ localStorage.setItem(CHAT_KEY, JSON.stringify(list)); return true; }
+  catch(e){ alert('저장 공간이 부족합니다. 오래된 대화를 삭제해 주세요.'); return false; }
+}
+function nmById(id){ const c = charById(id); return c ? nm(c) : id; }
+function fmtDate(ts){
+  return new Date(ts).toLocaleString(state.lang === 'en' ? 'en-US' : 'ko-KR',
+    { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+}
+
+// AI가 대화 내용을 보고 제목을 한 줄로 지음
+async function makeTitle(snap){
+  const fallback = (snap.topicMode === FREE_TOPIC ? '자유 주제' : snap.topicText) + ' 대화';
+  try{
+    const transcript = snap.history.slice(-30)
+      .map(m => `${nmById(m.speaker)}: ${m.text}`).join('\n');
+    const stable = state.lang === 'en'
+      ? 'You name conversations. Read the dialogue and reply with ONE short title (max 30 characters). No quotes, no explanation, title only. Write in English.'
+      : '너는 대화 제목을 짓는다. 대화 내용을 보고 핵심이 드러나는 짧은 제목을 한 줄로만 출력한다. 따옴표, 설명, 마크다운 없이 제목만 쓴다. 한국어로 쓴다.';
+    const text = await callClaude({ stable, dynamic: '[대화]\n' + transcript });
+    const t = text.replace(/["'`]/g, '').trim().split('\n')[0].slice(0, 30);
+    return t || fallback;
+  }catch(e){
+    return fallback;
+  }
+}
+
+async function saveCurrentChat(){
+  if(!state.history.length){ alert('저장할 대화가 없습니다.'); return; }
+  const btn = $('saveBtn');
+  const snap = {
+    id: 'c' + Date.now(),
+    savedAt: Date.now(),
+    lang: state.lang,
+    topicMode: state.topicMode,
+    topicText: state.topicText,
+    selected: state.selected.map(c => c.id),
+    history: state.history.map(t => ({ speaker: t.speaker, emotion: t.emotion, text: t.text })),
+    title: '',
+  };
+  btn.disabled = true;
+  $('status').textContent = '대화 제목을 만드는 중...';
+  snap.title = await makeTitle(snap);
+  btn.disabled = false;
+  const list = loadChats();
+  list.unshift(snap);
+  if(storeChats(list)) $('status').textContent = '저장됨: ' + snap.title;
+}
+$('saveBtn').onclick = saveCurrentChat;
+
+// ----- 대화 목록 -----
+function openList(){ renderList(); $('listOverlay').hidden = false; }
+function closeList(){ $('listOverlay').hidden = true; }
+$('listBtnSetup').onclick = openList;
+$('listBtnStage').onclick = openList;
+$('listClose').onclick = closeList;
+$('listOverlay').addEventListener('click', e => { if(e.target === $('listOverlay')) closeList(); });
+
+function makeBtn(label, primary, onClick){
+  const b = document.createElement('button');
+  b.className = 'cmd-btn' + (primary ? ' primary' : '');
+  b.textContent = label;
+  b.onclick = onClick;
+  return b;
+}
+function renderList(){
+  const body = $('listBody');
+  body.innerHTML = '';
+  const chats = loadChats();
+  if(!chats.length){
+    body.innerHTML = '<div class="list-empty">저장된 대화가 없습니다.</div>';
+    return;
+  }
+  chats.forEach(ch => {
+    const card = document.createElement('div');
+    card.className = 'chat-card';
+    const info = document.createElement('div');
+    info.className = 'chat-info';
+    const title = document.createElement('div');
+    title.className = 'chat-title';
+    title.textContent = ch.title;
+    const meta = document.createElement('div');
+    meta.className = 'chat-meta';
+    meta.textContent = '참여: ' + ch.selected.map(nmById).join(', ')
+      + ' · 대사 ' + ch.history.length + '개 · ' + fmtDate(ch.savedAt);
+    info.append(title, meta);
+    const acts = document.createElement('div');
+    acts.className = 'chat-actions';
+    acts.append(
+      makeBtn('이어하기', true, () => resumeChat(ch.id)),
+      makeBtn('삭제', false, () => deleteChat(ch.id)),
+    );
+    card.append(info, acts);
+    body.appendChild(card);
+  });
+}
+function deleteChat(id){
+  if(!confirm('이 대화를 삭제할까요?')) return;
+  storeChats(loadChats().filter(c => c.id !== id));
+  renderList();
+}
+
+// ----- 이어하기: 저장된 대사를 그대로 복원하고 다음 대사부터 이어서 생성 -----
+function resumeChat(id){
+  const ch = loadChats().find(c => c.id === id);
+  if(!ch) return;
+  const inStage = $('stage').style.display === 'grid';
+  if(inStage && state.history.length && !confirm('지금 대화는 저장되지 않습니다. 이 대화를 불러올까요?')) return;
+
+  const selected = ch.selected.map(charById).filter(Boolean);
+  if(selected.length < 2){ alert('이 대화의 캐릭터 정보를 불러올 수 없습니다.'); return; }
+
+  closeList();
+  loopSeq++; pendingTurn = null; fetching = false; state.running = false; state.directive = '';
+  state.lang = ch.lang === 'en' ? 'en' : 'ko'; safeSet(STORE.lang, state.lang);
+  state.topicMode = ch.topicMode; state.topicText = ch.topicText;
+  state.chosen = new Set(selected.map(c => c.id));
+  state.selected = selected;
+  state.history = [];
+  state.lastSpeaker = null;
+  state.emotion = {};
+  state.left = selected[0]; state.right = selected[1];
+
+  $('setup').style.display = 'none';
+  $('stage').style.display = 'grid';
+  $('log').innerHTML = '';
+  $('stopBtn').textContent = '일시정지';
+  $('status').textContent = '주제: ' + topicLabel();
+  renderPortraits(null);
+  renderSD(null);
+  // 저장된 대사를 순서대로 다시 표시 (슬롯·말풍선 방향·표정 모두 같은 경로로 복원)
+  ch.history.forEach(t => showTurn({ speaker: t.speaker, emotion: t.emotion, text: t.text }));
+  startLoop();
+}
+
+// ----- 삭제 전 확인과 함께 목록 닫기 (Esc) -----
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape' && !$('listOverlay').hidden) closeList();
+});
+
 </script>
 </body>
 </html>
