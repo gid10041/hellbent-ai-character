@@ -137,6 +137,10 @@ body.dark .cmd-btn.primary{background:#fff;color:#000;border-color:#fff}
 .chat-meta{font-size:13px;color:var(--muted);margin-top:4px}
 .chat-actions{display:flex;gap:8px;flex-shrink:0}
 
+.drawer{position:fixed;left:0;right:0;bottom:0;height:80vh;z-index:25;background:var(--canvas);border-top:1px solid var(--hairline);border-radius:24px 24px 0 0;padding:24px;display:flex;flex-direction:column;gap:16px;transform:translateY(100%);visibility:hidden;transition:transform .35s ease,visibility .35s}
+.drawer.open{transform:translateY(0);visibility:visible}
+.drawer .list-body{flex:1;min-height:0;overflow-y:auto;max-width:760px;width:100%;margin:0 auto}
+
 @media (max-width:700px){
   #setup h1{font-size:36px;letter-spacing:-1px}
   #stage{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr) auto;padding:8px;gap:8px}
@@ -229,21 +233,19 @@ body.dark .cmd-btn.primary{background:#fff;color:#000;border-color:#fff}
 </div>
 
 <div id="dirOverlay" class="cmd-overlay" hidden>
-  <div class="cmd-modal" role="dialog" aria-modal="true" aria-label="다음 대사 방향 명령">
-    <div class="cmd-title">다음 대사 방향 명령 (다음 한 번에만 적용)</div>
+  <div class="cmd-modal" role="dialog" aria-modal="true" aria-label="마지막 대사 방향 지정">
+    <div class="cmd-title">마지막 대사 방향 지정</div>
     <form id="dirForm" class="cmd-row" autocomplete="off">
-      <input type="text" id="dirInput" maxlength="200" placeholder="예) 레이시가 듀크를 더 놀려 줘">
+      <input type="text" id="dirInput" maxlength="200" placeholder="예) 더 짓궂게, 한숨 쉬면서 말하기">
       <button type="button" id="dirCancel" class="cmd-btn">취소</button>
       <button type="submit" class="cmd-btn primary">확인</button>
     </form>
   </div>
 </div>
 
-<div id="listOverlay" class="list-overlay" hidden>
-  <div class="list-panel" role="dialog" aria-modal="true" aria-label="대화 목록">
-    <div class="list-head"><span>대화 목록</span><button id="listClose" class="cmd-btn">닫기</button></div>
-    <div id="listBody" class="list-body"></div>
-  </div>
+<div id="listDrawer" class="drawer" role="dialog" aria-label="대화 목록">
+  <div class="list-head"><span>대화 목록</span></div>
+  <div id="listBody" class="list-body"></div>
 </div>
 
 <script>
@@ -498,7 +500,7 @@ $('stopBtn').onclick = () => {
 };
 $('resetBtn').onclick = () => {
   state.running = false;
-  loopSeq++; pendingTurn = null; fetching = false; state.directive = '';
+  loopSeq++; pendingTurn = null; fetching = false;
   $('stopBtn').textContent = '일시정지';
   $('stage').style.display = 'none';
   $('setup').style.display = 'flex';
@@ -684,10 +686,7 @@ function buildPrompt(){
     ? '자유 주제: 캐릭터들이 흥미롭게 이야기할 주제를 스스로 정해 자연스럽게 대화를 시작한다.'
     : state.topicText;
   const last = state.lastSpeaker ? nm(charById(state.lastSpeaker)) : '없음';
-  const dirLine = state.directive
-    ? `\n\n[이번 발언의 방향 지시]\n${state.directive}\n이 지시는 이번 발언 하나에만 반영하고, 자연스럽게 대화에 녹여 말한다.`
-    : '';
-  const dynamic = `[주제]\n${topicLine}\n\n[최근 대화]\n${recent}\n\n[규칙]\n- 직전 발언자(${last})는 다음 발언자로 고르지 않는다.\n- 직전 대화에 자연스럽게 반응하는 발언 하나를 만든다.${dirLine}\n\n다음 발언 하나를 JSON으로 출력하라.`;
+  const dynamic = `[주제]\n${topicLine}\n\n[최근 대화]\n${recent}\n\n[규칙]\n- 직전 발언자(${last})는 다음 발언자로 고르지 않는다.\n- 직전 대화에 자연스럽게 반응하는 발언 하나를 만든다.\n\n다음 발언 하나를 JSON으로 출력하라.`;
   return { stable, dynamic };
 }
 
@@ -785,7 +784,6 @@ async function fetchNext(force = false){
     if(myId !== loopSeq) return;      // 재시작/다시 설정으로 무효화된 결과
     pendingTurn = turn;
     failCount = 0;
-    state.directive = '';   // 방향 지시는 이 한 번의 출력에만 적용
     $('status').textContent = '주제: ' + topicLabel();
   }catch(err){
     console.error(err);
@@ -832,7 +830,7 @@ function makeTool(svg, label, onClick){
 const msgTools = document.createElement('div');
 msgTools.className = 'msg-tools';
 const editBtn = makeTool(PENCIL_SVG, '마지막 대사 수정', () => openCmd());
-const wandBtn = makeTool(WAND_SVG, '다음 대사 방향 명령', () => openDir());
+const wandBtn = makeTool(WAND_SVG, '마지막 대사 방향 지정', () => openDir());
 msgTools.append(editBtn, wandBtn);
 
 function lastMsgWrap(){
@@ -890,8 +888,7 @@ function applyEdit(text){
   fetchNext();
 }
 
-// ----- 다음 대사 방향 명령 (다음 한 번의 출력에만 적용) -----
-state.directive = '';
+// ----- 마지막 대사 방향 지정: AI가 그 발언을 방향에 맞게 다시 씀 -----
 function openDir(){
   if(!state.history.length) return;
   $('dirOverlay').hidden = false;
@@ -908,24 +905,62 @@ document.addEventListener('keydown', e => {
 });
 $('dirForm').addEventListener('submit', e => {
   e.preventDefault();
-  const cmd = $('dirInput').value.trim();
+  const dir = $('dirInput').value.trim();
   closeDir();
-  if(cmd) applyDirective(cmd);
+  if(dir) rewriteLast(dir);
 });
-// 대기 중인 다음 대사를 폐기하고, 입력한 방향으로 다시 생성
-function applyDirective(cmd){
-  state.directive = cmd;
-  loopSeq++;
-  pendingTurn = null;
-  fetching = false;
-  setNextUI();
-  $('status').textContent = '방향 적용 중: ' + cmd;
-  fetchNext(true);
+
+function parseEmotionText(raw){
+  const s = raw.indexOf('{'), e = raw.lastIndexOf('}');
+  if(s < 0 || e < 0) throw new Error('응답 형식이 올바르지 않습니다.');
+  const o = JSON.parse(raw.slice(s, e + 1));
+  if(!o.text || !String(o.text).trim()) throw new Error('빈 대사');
+  if(!EMOTIONS.includes(o.emotion)) o.emotion = null;
+  return o;
+}
+
+// 마지막 대사를 방향에 맞게 다시 쓰고 화면·기록을 교체. 준비된 다음 대사는 폐기하고 새로 준비.
+async function rewriteLast(direction){
+  const last = state.history[state.history.length - 1];
+  if(!last) return;
+  const prior = state.history.slice(0, -1).slice(-12)
+    .map(m => `${nm(charById(m.speaker))}(${m.emotion}): ${m.text}`).join('\n') || '(아직 대화 없음)';
+  const roster = state.selected.map(c => `## ${nm(c)} (id: ${c.id})\n${c.profile}`).join('\n\n');
+  const langRule = state.lang === 'en' ? 'Write the dialogue in English.' : '대사는 한국어로 작성한다.';
+  const stable = `${COMMON_GUIDE}\n\n[언어]\n${langRule}\n\n[등장인물]\n${roster}\n\n[출력 형식]\n반드시 JSON 객체 하나만 출력한다. 설명이나 마크다운을 붙이지 않는다.\n{"emotion":"<emotion>","text":"<대사>"}\nemotion은 다음 중 하나: ${EMOTIONS.join(', ')}`;
+  const dynamic = `[지금까지의 대화]\n${prior}\n\n[다시 쓸 발언] ${nm(charById(last.speaker))} (id: ${last.speaker})\n원래 대사: ${last.text}\n\n[수정 방향]\n${direction}\n\n위 발언을 같은 캐릭터가 수정 방향에 맞게 다시 쓴다. 1~2문장으로, 직전 대화 흐름에 자연스럽게 이어지도록 JSON으로 출력하라.`;
+
+  // 진행 중이던 다음 대사는 수정 전 문장 기준이므로 폐기
+  loopSeq++; pendingTurn = null; fetching = false; setNextUI();
+  const myId = loopSeq;
+  $('status').textContent = '마지막 대사 다시 쓰는 중...';
+  try{
+    const o = parseEmotionText(await callClaude({ stable, dynamic }));
+    if(myId !== loopSeq) return;
+    last.text = String(o.text).trim();
+    if(o.emotion) last.emotion = o.emotion;
+    state.emotion[last.speaker] = last.emotion;
+    const wrap = lastMsgWrap();
+    if(wrap){
+      const bubble = wrap.querySelector('.bubble');
+      bubble.querySelector('.bubble-text').textContent = last.text;
+      fitBubble(bubble, wrap.classList.contains('left'));
+    }
+    renderPortraits(state.lastSpeaker);
+    renderSD(state.lastSpeaker);
+    placeEditBtn();
+  }catch(err){
+    console.error(err);
+    alert('다시 쓰기에 실패했습니다: ' + err.message);
+  }
+  if(myId === loopSeq){
+    $('status').textContent = '주제: ' + topicLabel();
+    fetchNext();
+  }
 }
 
 function startLoop(){
   loopSeq++;
-  state.directive = '';
   state.running = true;
   pendingTurn = null;
   fetching = false;
@@ -1209,12 +1244,12 @@ async function saveCurrentChat(){
 $('saveBtn').onclick = saveCurrentChat;
 
 // ----- 대화 목록 -----
-function openList(){ renderList(); $('listOverlay').hidden = false; }
-function closeList(){ $('listOverlay').hidden = true; }
-$('listBtnSetup').onclick = openList;
-$('listBtnStage').onclick = openList;
-$('listClose').onclick = closeList;
-$('listOverlay').addEventListener('click', e => { if(e.target === $('listOverlay')) closeList(); });
+function isListOpen(){ return $('listDrawer').classList.contains('open'); }
+function openList(){ renderList(); $('listDrawer').classList.add('open'); }
+function closeList(){ $('listDrawer').classList.remove('open'); }
+function toggleList(){ isListOpen() ? closeList() : openList(); }
+$('listBtnSetup').onclick = toggleList;
+$('listBtnStage').onclick = toggleList;
 
 function makeBtn(label, primary, onClick){
   const b = document.createElement('button');
@@ -1271,7 +1306,7 @@ function resumeChat(id){
   if(selected.length < 2){ alert('이 대화의 캐릭터 정보를 불러올 수 없습니다.'); return; }
 
   closeList();
-  loopSeq++; pendingTurn = null; fetching = false; state.running = false; state.directive = '';
+  loopSeq++; pendingTurn = null; fetching = false; state.running = false;
   state.lang = ch.lang === 'en' ? 'en' : 'ko'; safeSet(STORE.lang, state.lang);
   state.topicMode = ch.topicMode; state.topicText = ch.topicText;
   state.chosen = new Set(selected.map(c => c.id));
@@ -1295,7 +1330,7 @@ function resumeChat(id){
 
 // ----- 삭제 전 확인과 함께 목록 닫기 (Esc) -----
 document.addEventListener('keydown', e => {
-  if(e.key === 'Escape' && !$('listOverlay').hidden) closeList();
+  if(e.key === 'Escape' && isListOpen()) closeList();
 });
 
 </script>
