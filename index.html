@@ -1397,6 +1397,28 @@ function drawContain(ctx, img, r){
 }
 function imgReady(img){ return img && img.complete && img.naturalWidth > 0; }
 
+// 화면에 보이는 줄 그대로 나눠 읽기: 글자 위치의 세로 좌표가 바뀌는 지점을 줄바꿈으로 본다
+function domLines(el){
+  const node = el.firstChild;
+  if(!node || node.nodeType !== 3) return [el.textContent.trim()];
+  const text = node.textContent;
+  const range = document.createRange();
+  const lines = [];
+  let cur = '', lastTop = null;
+  for(let i = 0; i < text.length; i++){
+    range.setStart(node, i); range.setEnd(node, i + 1);
+    const rects = range.getClientRects();
+    if(rects.length){
+      const top = Math.round(rects[0].top);
+      if(lastTop !== null && Math.abs(top - lastTop) > 4){ lines.push(cur); cur = ''; }
+      lastTop = top;
+    }
+    cur += text[i];
+  }
+  if(cur) lines.push(cur);
+  return lines.map(s => s.trim()).filter(s => s.length);
+}
+
 async function captureScreen(){
   const base = $('stage').getBoundingClientRect();
   const W = Math.round(base.width), H = Math.round(base.height);
@@ -1466,13 +1488,14 @@ async function captureScreen(){
     ctx.fillStyle = bubble.style.getPropertyValue('--c') || '#ffffff';
     ctx.fill();
 
-    ctx.font = msgFont;
-    const lines = wrapLines(ctx, bubble.querySelector('.bubble-text').textContent, br.w - 36);
-    const lh = 24.8;
-    const top = br.y + (br.h - lines.length * lh) / 2;
+    const txtEl = bubble.querySelector('.bubble-text');
+    const tcs = getComputedStyle(txtEl);
+    const tr = rectOf(txtEl, base);
+    const lh = parseFloat(tcs.lineHeight) || parseFloat(tcs.fontSize) * 1.55;
+    ctx.font = `${tcs.fontWeight} ${tcs.fontSize} ${tcs.fontFamily}`;
     ctx.fillStyle = bubble.style.getPropertyValue('--tc') || '#ffffff';
     ctx.textBaseline = 'middle';
-    lines.forEach((l, i) => ctx.fillText(l, br.x + 18, top + i * lh + lh / 2));
+    domLines(txtEl).forEach((l, i) => ctx.fillText(l, tr.x, tr.y + i * lh + lh / 2));
     ctx.textBaseline = 'alphabetic';
   }
 
