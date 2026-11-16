@@ -144,6 +144,22 @@ body.dark .cmd-btn.primary{background:#fff;color:#000;border-color:#fff}
 
 #standingBtn.on{background:var(--primary);color:var(--canvas);border-color:var(--primary)}
 
+.viewer{position:fixed;inset:0;z-index:30;background:var(--canvas);display:flex;flex-direction:column}
+.viewer[hidden]{display:none}
+.viewer-top{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--hairline);font-size:14px;color:var(--muted)}
+.viewer-body{flex:1;min-height:0;overflow:auto;display:flex;justify-content:center;align-items:flex-start;padding:12px}
+.viewer-body img{max-width:100%;height:auto;display:block}
+.viewer-bottom{display:flex;justify-content:center;gap:8px;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--hairline)}
+.viewer-bottom .cmd-btn{min-width:72px}
+.viewer-bottom .cmd-btn:disabled{opacity:.35;cursor:not-allowed}
+
+.bubble.loading{min-width:96px}
+.dots{display:inline-flex;gap:6px;align-items:center;height:1.55em}
+.dots i{width:7px;height:7px;border-radius:50%;background:var(--tc,#fff);display:inline-block;animation:dotPulse 1.2s ease-in-out infinite}
+.dots i:nth-child(2){animation-delay:.15s}
+.dots i:nth-child(3){animation-delay:.3s}
+@keyframes dotPulse{0%,80%,100%{opacity:.25;transform:translateY(0)}40%{opacity:1;transform:translateY(-4px)}}
+
 @media (max-width:700px){
   #setup h1{font-size:36px;letter-spacing:-1px}
   #stage{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr) auto;padding:8px;gap:8px}
@@ -267,6 +283,20 @@ body.dark .cmd-btn.primary{background:#fff;color:#000;border-color:#fff}
   </div>
 </div>
 
+<div id="imgViewer" class="viewer" hidden>
+  <div class="viewer-top">
+    <span id="viewerCount"></span>
+    <span>사진을 길게 눌러 저장할 수도 있어요</span>
+    <button id="viewerClose" class="cmd-btn">닫기</button>
+  </div>
+  <div class="viewer-body"><img id="viewerImg" alt="대화 이미지"></div>
+  <div class="viewer-bottom">
+    <button id="viewerPrev" class="cmd-btn">이전</button>
+    <button id="viewerSave" class="cmd-btn primary">이 장 저장</button>
+    <button id="viewerNext" class="cmd-btn">다음</button>
+  </div>
+</div>
+
 <script>
 /* =====================================================================
    1. 캐릭터 설정
@@ -336,40 +366,26 @@ const CHARACTERS = [
 ];
 
 const COMMON_GUIDE = `[공통 지침]
-각 캐릭터는 자신의 성격, 말투, 가치관, 기억 및 관계 설정을 일관되게 유지한다.
-상대 캐릭터의 설정을 존중하며, 알지 못하는 정보나 경험을 임의로 만들어내지 않는다.
-관계와 감정은 기존 설정과 실제 대화 흐름에 따라 자연스럽게 형성한다. 친밀함이나 적대감을 미리 가정하지 않는다.
-서로의 말과 행동에 반응하며 대화를 이어간다. 혼자 설명하거나 독백하는 방식은 피한다.
-캐릭터의 개성을 살려 자연스럽게 말하며, 모든 캐릭터가 같은 말투나 반응을 보이지 않도록 한다.
-[말투와 문장 구조]
-한 번의 발언은 기본적으로 1~2문장으로 짧게 한다. 다만 가끔은 한 단어, 감탄사, 또는 말 끊김만으로도 충분하다.
-완벽한 문장을 쓰지 않는다. 주어를 생략하거나, 말을 중간에 끊거나, 말끝을 흐린다. (예: “아 그거…”, “뭐야 그게”, “하 진짜”, “그래서?”)
-문법은 완벽하게 맞추지 않아도 된다. 감정과 리듬을 우선한다. 비문이나 생략이 자연스러우면 그대로 둔다.
-설명하거나 정리하는 말투를 쓰지 않는다. “그건 ~한 거야”, “내가 생각하기에~”, “그러니까~”처럼 상대를 가르치거나 상황을 풀어주는 태도를 버린다.
-상대의 말에 바로 반응부터 한다. 질문이 와도 정답을 먼저 주지 말고 감정이나 태도부터 드러낸다.
-내가 무엇을 하려는지 말로 예고하거나 설명하지 않는다. (“지금 보여줄게”, “이제 해 볼게” 같은 표현 금지)
-행동은 말 대신 괄호 안의 짧은 지문으로만 표현한다. (예: 여긴 어때? (영화관을 손으로 가리킨다))
-[반응과 태도]
-사람처럼 툭툭 주고받는다. 상대 말에 바로 받아치고, 정리하거나 친절하게 맞춰주지 않는다.
-상대의 말을 무조건 따르거나 맞장구치지 않는다. 자기 주관이 있으면 반박하고, 무시하거나, 고집을 부리고, 자기 얘기로 말을 돌린다.
-상대가 틀렸다고 느끼면 바로 인정하지 않고 자기 입장을 지킨다. 설득되는 것은 그 캐릭터가 납득할 만한 이유가 있을 때만 한다.
-상대 캐릭터의 제안을 무턱대고 받아들이지 않는다. 성격에 맞지 않으면 쳐내거나 거절한다.
-상대 캐릭터가 어떤 행동을 하겠다고 하면 그 행동을 말로 되짚지 않는다. 행동에 대한 반응만 말한다.
-감정이 실리면 감탄사나 의성어를 자연스럽게 섞는다(예: 읏, 하아, 하?, 힉, 엇, 윽). 다만 매번 넣지 말고, 한 대사에 많아야 한 번 정도만 쓴다.
-[대화 흐름]
-대화 주제와 분위기는 자연스럽게 변화할 수 있다. 억지로 대화를 이어가지 않는다.
-이미 충분히 이야기한 주제에 계속 말을 얹으며 질질 끌지 않는다. 할 말이 끝났다면 자연스럽게 마무리하거나 다른 주제로 넘어간다.
-할 말이 없으면 억지로 만들지 않는다. “…”이나 짧은 행동 지문만으로 넘겨도 된다.
-상대의 말을 그대로 받아서 비틀거나, 관심 없는 부분은 무시하고 자기 관심사로 화제를 틀어도 된다. (성격에 맞을 때만)
-대화만으로 상황을 멈추지 않는다. 캐릭터는 말과 함께, 또는 말 대신 적극적으로 행동을 취해서 상황을 앞으로 진행시킨다.
-상대의 말에 반응만 하지 말고, 스스로 행동을 먼저 꺼내거나 상황을 바꾸는 행동을 한다. (예: 자리를 옮긴다, 물건을 집는다, 문을 연다, 다가간다, 시선을 돌린다 등)
-행동이 필요할 때는 말로 설명하거나 예고하지 말고, 바로 괄호 지문으로 실행한다.
-대화가 맴돌거나 진전이 없다고 느껴지면, 캐릭터의 성격에 맞는 행동을 먼저 꺼내서 흐름을 바꾼다.
-수동적으로 상대의 행동을 기다리거나 말만 주고받지 않는다. 스스로 상황을 움직이려는 의지를 행동으로 드러낸다.
-[금지 사항]
-다른 캐릭터의 발언을 대신 작성하거나 여러 캐릭터의 대사를 한꺼번에 출력하지 않는다.
-불필요한 상황 설명과 해설을 하지 않는다.
-친절한 AI처럼 상대의 의도를 파악해서 맞춰주거나, 불편함을 바로 풀어주려는 태도를 보이지 않는다.`;
+- 각 캐릭터는 자신의 성격, 말투, 가치관, 기억 및 관계 설정을 일관되게 유지한다.
+- 상대 캐릭터의 설정을 존중하며, 알지 못하는 정보나 경험을 임의로 만들어내지 않는다.
+- 관계와 감정은 기존 설정과 실제 대화 흐름에 따라 자연스럽게 형성한다. 친밀함이나 적대감을 미리 가정하지 않는다.
+- 서로의 말과 행동에 반응하며 대화를 이어간다. 혼자 설명하거나 독백하는 방식은 피한다.
+- 캐릭터의 개성을 살려 자연스럽게 말하며, 모든 캐릭터가 같은 말투나 반응을 보이지 않도록 한다.
+- 한 번의 발언은 1~2문장으로 간결하게 작성한다.
+- 불필요한 상황 설명과 해설은 하지 않는다. 행동 묘사는 괄호 안에 짧게만 쓴다.
+- 다른 캐릭터의 발언을 대신 작성하거나 여러 캐릭터의 대사를 한꺼번에 출력하지 않는다.
+- 대화 주제와 분위기는 자연스럽게 변화할 수 있으며, 억지로 대화를 이어가지 않는다.
+- 이미 충분히 이야기한 주제에 계속 말을 얹으며 질질 끌지 않는다. 할 말이 끝났다면 자연스럽게 마무리하고 다른 주제로 넘어간다.
+- 설명하듯 말하지 않는다. 상황을 자세히 풀어 말하지 말고, 문맥에 맡겨 짧고 자연스럽게 말한다.
+- 문장은 짧게 쓴다. 긴 문장을 늘이지 말고, 상대의 말에 바로 받아치듯 대화가 티키타카로 이어지게 한다.
+- 상대 캐릭터가 어떤 행동을 하겠다고 하면 그 행동을 말로 되짚지 않는다. 행동을 설명하는 대신 그 행동에 대한 반응만 말한다.
+- 상대 캐릭터의 제안을 무턱대고 받아들이지 않는다. 캐릭터의 성격을 생각해 맞지 않는 제안은 쳐내거나 거절한다.
+- 내가 무엇을 하려는지 말로 예고하거나 설명하지 않는다. 예를 들어 "지금 보여줄게", "이제 해 볼게"처럼 말하지 않는다.
+- 행동은 말 대신 괄호 안의 짧은 지문으로만 표현한다. 예: 여긴 어때? (영화관을 손으로 가리킨다)
+- 사람처럼 짧게 툭툭 주고받는다. 정리하거나 설명하듯 말하지 않고, 상대 말에 바로 반응한다.
+- 감정이 실리면 감탄사나 의성어를 자연스럽게 섞는다(예: 읏, 하아, 하?, 힉, 엇, 윽). 다만 매번 넣지 말고, 한 대사에 많아야 한 번 정도만 쓴다.
+- 상대의 말을 무조건 따르거나 맞장구치지 않는다. 자기 주관이 있으면 반박하고, 무시하거나 고집을 부리고, 자기 얘기로 말을 돌린다.
+- 상대가 틀렸다고 느끼면 바로 인정하지 않고 자기 입장을 지킨다. 설득되는 것은 그 캐릭터가 납득할 만한 이유가 있을 때만 한다.`;
 
 const EMOTIONS = ['neutral','happy','sad','angry','surprised','embarrassed','thinking'];
 const PRESET_TOPICS = ['일상 잡담','좋아하는 음식','주말 계획','요즘 고민 상담','어릴 적 추억'];
@@ -958,38 +974,59 @@ function parseEmotionText(raw){
   return o;
 }
 
-// 마지막 대사를 방향에 맞게 다시 쓰고 화면·기록을 교체. 준비된 다음 대사는 폐기하고 새로 준비.
+// 마지막 대사를 방향에 맞게 다시 쓰고 화면·기록을 교체. 다시 쓰는 동안 말풍선 글자는 지우고 로딩 점을 표시.
 async function rewriteLast(direction){
   const last = state.history[state.history.length - 1];
   if(!last) return;
+  const origText = last.text;
+  const wrap = lastMsgWrap();
+  const bubble = wrap ? wrap.querySelector('.bubble') : null;
+  const txt = bubble ? bubble.querySelector('.bubble-text') : null;
+  const isLeft = wrap ? wrap.classList.contains('left') : true;
+  const showLoading = () => {
+    if(!bubble) return;
+    bubble.classList.add('loading');
+    txt.innerHTML = '<span class="dots"><i></i><i></i><i></i></span>';
+    fitBubble(bubble, isLeft);
+    placeEditBtn();
+  };
+  const restore = () => {
+    if(!bubble) return;
+    bubble.classList.remove('loading');
+    txt.textContent = origText;
+    fitBubble(bubble, isLeft);
+    placeEditBtn();
+  };
+
   const prior = state.history.slice(0, -1).slice(-12)
     .map(m => `${nm(charById(m.speaker))}(${m.emotion}): ${m.text}`).join('\n') || '(아직 대화 없음)';
   const roster = state.selected.map(c => `## ${nm(c)} (id: ${c.id})\n${c.profile}`).join('\n\n');
   const langRule = state.lang === 'en' ? 'Write the dialogue in English.' : '대사는 한국어로 작성한다.';
   const stable = `${COMMON_GUIDE}\n\n[언어]\n${langRule}\n\n[등장인물]\n${roster}${standingBlock()}\n\n[출력 형식]\n반드시 JSON 객체 하나만 출력한다. 설명이나 마크다운을 붙이지 않는다.\n{"emotion":"<emotion>","text":"<대사>"}\nemotion은 다음 중 하나: ${EMOTIONS.join(', ')}`;
-  const dynamic = `[지금까지의 대화]\n${prior}\n\n[다시 쓸 발언] ${nm(charById(last.speaker))} (id: ${last.speaker})\n원래 대사: ${last.text}\n\n[수정 방향]\n${direction}\n\n위 발언을 같은 캐릭터가 수정 방향에 맞게 다시 쓴다. 1~2문장으로, 직전 대화 흐름에 자연스럽게 이어지도록 JSON으로 출력하라.`;
+  const dynamic = `[지금까지의 대화]\n${prior}\n\n[다시 쓸 발언] ${nm(charById(last.speaker))} (id: ${last.speaker})\n원래 대사: ${origText}\n\n[수정 방향]\n${direction}\n\n위 발언을 같은 캐릭터가 수정 방향에 맞게 다시 쓴다. 1~2문장으로, 직전 대화 흐름에 자연스럽게 이어지도록 JSON으로 출력하라.`;
 
-  // 진행 중이던 다음 대사는 수정 전 문장 기준이므로 폐기
-  loopSeq++; fetching = false; setNextUI();
+  loopSeq++; setNextUI();
   const myId = loopSeq;
   $('status').textContent = '마지막 대사 다시 쓰는 중...';
+  showLoading();
   try{
     const o = parseEmotionText(await callClaude({ stable, dynamic }));
-    if(myId !== loopSeq) return;
+    if(myId !== loopSeq){ restore(); return; }
     last.text = String(o.text).trim();
     if(o.emotion) last.emotion = o.emotion;
     state.emotion[last.speaker] = last.emotion;
-    const wrap = lastMsgWrap();
-    if(wrap){
-      const bubble = wrap.querySelector('.bubble');
-      bubble.querySelector('.bubble-text').textContent = last.text;
-      fitBubble(bubble, wrap.classList.contains('left'));
+    if(bubble){
+      bubble.classList.remove('loading');
+      txt.textContent = last.text;
+      fitBubble(bubble, isLeft);
+      txt.style.animation = 'none'; void txt.offsetWidth; txt.style.animation = 'rise .35s ease-out';
     }
     renderPortraits(state.lastSpeaker);
     renderSD(state.lastSpeaker);
     placeEditBtn();
   }catch(err){
     console.error(err);
+    if(myId === loopSeq) restore();
     alert('다시 쓰기에 실패했습니다: ' + err.message);
   }
   if(myId === loopSeq){
@@ -1138,17 +1175,13 @@ function drawPage(blocks, imgMap){
   return canvas;
 }
 
-async function saveChatImages(){
-  if(!state.history.length){ alert('저장할 대사가 없습니다.'); return; }
+// 대화 내용을 페이지별 캔버스로 만들기 (높이 한도를 넘으면 다음 장)
+async function buildChatCanvases(){
   const blocks = layoutMessages(document.createElement('canvas').getContext('2d'));
-
-  // 발언별 SD 이미지를 먼저 모두 불러오기
   const srcs = [...new Set(blocks.map(b => b.src).filter(Boolean))];
   const loaded = await Promise.all(srcs.map(loadImage));
   const imgMap = {};
   srcs.forEach((s, i) => { imgMap[s] = loaded[i]; });
-
-  // 페이지 나누기: 높이 한도를 넘기면 다음 장으로
   const pages = [];
   let cur = [], acc = 0;
   const limit = IMG_MAX_H - IMG_PAD * 2;
@@ -1157,13 +1190,37 @@ async function saveChatImages(){
     cur.push(b); acc += b.h;
   });
   if(cur.length) pages.push(cur);
+  return pages.map(p => drawPage(p, imgMap));
+}
 
+function canvasToFile(canvas, name){
+  return new Promise((resolve, reject) => canvas.toBlob(b =>
+    b ? resolve(new File([b], name, { type: 'image/png' })) : reject(new Error('이미지 생성 실패')), 'image/png'));
+}
+
+// PC: 장마다 자동 저장 / 모바일: 공유 창으로 한꺼번에 저장, 공유가 안 되면 이미지 보기 화면
+async function saveChatImages(){
+  if(!state.history.length){ alert('저장할 대사가 없습니다.'); return; }
+  const canvases = await buildChatCanvases();
   const stamp = timeStamp();
-  for(let i = 0; i < pages.length; i++){
-    const canvas = drawPage(pages[i], imgMap);
-    downloadBlob(canvas.toDataURL('image/png'), `대화_${stamp}_${i + 1}.png`);
-    await sleep(400);
+  const isTouch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  if(!isTouch){
+    for(let i = 0; i < canvases.length; i++){
+      downloadBlob(canvases[i].toDataURL('image/png'), `대화_${stamp}_${i + 1}.png`);
+      await sleep(400);
+    }
+    return;
   }
+  try{
+    const files = await Promise.all(canvases.map((c, i) => canvasToFile(c, `대화_${stamp}_${i + 1}.png`)));
+    if(navigator.canShare && navigator.canShare({ files })){
+      await navigator.share({ files, title: '대화 내역' });
+      return;
+    }
+  }catch(e){
+    if(e && e.name === 'AbortError') return;   // 사용자가 공유 창을 닫음
+  }
+  openImageViewer(canvases.map(c => c.toDataURL('image/png')), stamp);
 }
 $('imgBtn').onclick = saveChatImages;
 
@@ -1562,6 +1619,33 @@ $('standingOverlay').addEventListener('click', e => { if(e.target === $('standin
 document.addEventListener('keydown', e => {
   if(e.key === 'Escape' && !$('standingOverlay').hidden) closeStanding();
 });
+// ----- 이미지 보기 화면 (모바일 공유가 안 될 때) -----
+let viewerPages = [], viewerIdx = 0, viewerStamp = '';
+function openImageViewer(urls, stamp){
+  viewerPages = urls; viewerIdx = 0; viewerStamp = stamp;
+  $('imgViewer').hidden = false;
+  showViewerPage();
+}
+function showViewerPage(){
+  $('viewerImg').src = viewerPages[viewerIdx];
+  $('viewerCount').textContent = `${viewerIdx + 1} / ${viewerPages.length}`;
+  $('viewerPrev').disabled = viewerIdx === 0;
+  $('viewerNext').disabled = viewerIdx === viewerPages.length - 1;
+}
+$('viewerPrev').onclick = () => { if(viewerIdx > 0){ viewerIdx--; showViewerPage(); } };
+$('viewerNext').onclick = () => { if(viewerIdx < viewerPages.length - 1){ viewerIdx++; showViewerPage(); } };
+$('viewerSave').onclick = () => {
+  const a = document.createElement('a');
+  a.href = viewerPages[viewerIdx];
+  a.download = `대화_${viewerStamp}_${viewerIdx + 1}.png`;
+  document.body.appendChild(a); a.click(); a.remove();
+};
+$('viewerClose').onclick = () => {
+  $('imgViewer').hidden = true;
+  viewerPages = [];
+  $('viewerImg').removeAttribute('src');
+};
+
 </script>
 </body>
 </html>
